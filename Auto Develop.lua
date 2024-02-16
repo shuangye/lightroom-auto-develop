@@ -57,15 +57,20 @@ function processPhoto(photo)
     local developSettings = photo:getDevelopSettings()  -- a table
     local iso = photo:getRawMetadata("isoSpeedRating")  -- number
     local factor = 33    -- ISO <= 100: Luminance NR = 5; ISO >= 1000: Luminance NR = 30
-    local luminanceNoiseReduction = iso / factor
 
     -- Luminance noise always exists. So limit the min value.
-    if luminanceNoiseReduction < 5 then
-        luminanceNoiseReduction = 5
-    end
     -- Luminance noise reduction becomes less effective when > 30
-    if luminanceNoiseReduction > 30 then
-        luminanceNoiseReduction = 30
+    local luminanceNoiseReductionMin, luminanceNoiseReductionMax = 5, 30
+
+    -- Convert to integer to prevent fake changed value in `setDevelopSettings()`
+    -- Seems Lightroom internal Lua interpreter does not support `//` operator: unexpected symbol near '/'
+    local luminanceNoiseReduction = math.floor(iso / factor)
+
+    if luminanceNoiseReduction < luminanceNoiseReductionMin then
+        luminanceNoiseReduction = luminanceNoiseReductionMin
+    end
+    if luminanceNoiseReduction > luminanceNoiseReductionMax then
+        luminanceNoiseReduction = luminanceNoiseReductionMax
     end
 
     local colorNoiseReduction = developSettings["ColorNoiseReduction"]  -- number
