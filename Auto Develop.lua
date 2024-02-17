@@ -31,14 +31,17 @@ local LrLogger = import "LrLogger"
 local scriptName = "Auto Develop"
 
 -- Follow Lightroom Classic SDK Guide to see the logs
-local myLogger = LrLogger("libraryLogger")
+local myLogger = LrLogger("libraryLogger")  -- log file name; will be in ~/Documents/LrClassicLogs/
+-- myLogger:enable("logfile")
 -- myLogger:enable("print")
 
 
 function mylog(content)
     local label = scriptName
-    print("[" .. label .. "] " .. content)
+    -- print("[" .. label .. "] " .. content)
+    myLogger:trace("[" .. label .. "] " .. content)
 end
+
 
 function setDevelopSettings(settings, key, value)
     local changed = false
@@ -53,9 +56,20 @@ end
 
 -- Handles one photo
 function processPhoto(photo)
+    local fileName = photo:getFormattedMetadata("fileName")
+    local format = photo:getRawMetadata("fileFormat")
+    if format == "VIDEO" then
+        return
+    end
+
+    local iso = photo:getRawMetadata("isoSpeedRating")  -- a number
+    if iso == nil then
+        mylog(fileName .. ": unable to get ISO speed")
+        return
+    end
+
     local changed = false
     local developSettings = photo:getDevelopSettings()  -- a table
-    local iso = photo:getRawMetadata("isoSpeedRating")  -- number
     local factor = 33    -- ISO <= 100: Luminance NR = 5; ISO >= 1000: Luminance NR = 30
 
     -- Luminance noise always exists. So limit the min value.
@@ -78,7 +92,6 @@ function processPhoto(photo)
         colorNoiseReduction = luminanceNoiseReduction
     end
 
-    local fileName = photo:getFormattedMetadata("fileName")
     mylog(fileName .. ": ISO = " .. iso .. ", will set luminance NR = " .. luminanceNoiseReduction .. ", color NR = " .. colorNoiseReduction)
 
     local ret = setDevelopSettings(developSettings, "LuminanceSmoothing", luminanceNoiseReduction)
@@ -94,12 +107,16 @@ end
 
 
 LrTasks.startAsyncTask(function()
-    local photos = catalog:getTargetPhotos()
-    local count = #photos
-    if count == 0 then
+    -- If there is a selection, `catalog:getTargetPhotos()` returns the list of selected photos.
+    -- Otherwise, it returns the entire list of photos in the filmstrip.
+    -- Returning the entire list of photos in the filmstrip is not desired, so do nothing if no selection.
+    if catalog:getTargetPhoto() == nil then
         mylog("No photos selected. Nothing to do.")
         return
     end
+
+    local photos = catalog:getTargetPhotos()
+    local count = #photos
 
     --[[
     prompt = "Will apply auto develop settings to " .. count .. " photo(s)..."
@@ -110,6 +127,7 @@ LrTasks.startAsyncTask(function()
     ]]
 
     local progressScope = ProgressScope({ title = scriptName, caption = scriptName, })
+
     for i, photo in ipairs(photos) do
         processPhoto(photo)
         -- LrTasks.sleep(2)    -- Simulate a time-consuming operation, to check whether the ProgressScope updates correctly.
